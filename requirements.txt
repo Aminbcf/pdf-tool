@@ -1,0 +1,12 @@
+pymupdf
+sentence-transformers
+faiss-cpu
+torch
+transformers
+bitsandbytes
+numpy
+fastapi
+uvicorn[standard]
+python-multipart
+reportlab
+python-docx

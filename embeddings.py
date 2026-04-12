@@ -20,7 +20,8 @@ def build_faiss_index(embeddings):
     index.add(np.array(embeddings))
     return index
 
-def search(query, model, index, pages, k=5):
+def search_old(query, model, index, pages, k=3):
+    model = model = SentenceTransformer('all-MiniLM-L6-v2' , device='cuda')
     query_vec = model.encode([query])
     D, I = index.search(query_vec, k)
     
@@ -30,13 +31,26 @@ def search(query, model, index, pages, k=5):
     
     return results  
 
+def search(query):
+    
+    pages = extract_pages("ilovepdf_merged.pdf")
+    embeddings = encode_pages(pages)
+    index = build_faiss_index(embeddings)
+
+    results = search_old(query, model, index, pages)
+
+    return results
+
+
+
 # test 
 
 pages = extract_pages("ilovepdf_merged.pdf")
 embeddings = encode_pages(pages)
 index = build_faiss_index(embeddings)
 
-results = search("Contact Qualification B2C", model, index, pages)
+results = search_old("Contact Qualification B2C", model, index, pages)
 
 for r in results:
     print(f"{r['doc_id']} - Page {r['page']}")
+    
