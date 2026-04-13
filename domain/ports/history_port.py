@@ -15,3 +15,6 @@ class IConversationHistory(ABC):
 
     @abstractmethod
     def list_sessions(self) -> List[Conversation]: ...
+
+    @abstractmethod
+    def delete(self, session_id: str) -> None: ...

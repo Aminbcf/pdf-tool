@@ -1,7 +1,13 @@
-import React from 'react'
+import React, { useState } from 'react'
+import { pdfUrl } from '../api.js'
 
-export default function Message({ message }) {
+export default function Message({ message, sessionId, onExport }) {
   const isUser = message.role === 'user'
+
+  const openPage = (page) => {
+    if (!sessionId || !page) return
+    window.open(pdfUrl(sessionId, page), '_blank', 'noopener')
+  }
 
   return (
     <div style={{
@@ -28,21 +34,7 @@ export default function Message({ message }) {
         <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start', maxWidth: 700, width: '100%' }}>
           <AssistantIcon />
           <div style={{ flex: 1, paddingTop: 1, minWidth: 0 }}>
-            <MarkdownRenderer content={message.content} />
-
-            {message.exportFormat && (
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                marginTop: 10, padding: '3px 9px',
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-light)',
-                borderRadius: 5,
-                fontSize: 11, color: 'var(--text-2)',
-              }}>
-                <DownloadIcon />
-                Exported as {message.exportFormat.toUpperCase()}
-              </div>
-            )}
+            <MarkdownRenderer content={message.content} onPageClick={openPage} />
 
             {(message.keywords?.length > 0 || message.pages?.length > 0) && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 10 }}>
@@ -59,18 +51,13 @@ export default function Message({ message }) {
                   </span>
                 ))}
                 {message.pages?.map((p, i) => (
-                  <span key={`p${i}`} style={{
-                    fontSize: 11,
-                    padding: '2px 7px',
-                    borderRadius: 4,
-                    color: 'var(--accent)',
-                    border: '1px solid var(--accent)',
-                    opacity: 0.75,
-                  }}>
-                    p.{p}
-                  </span>
+                  <PageChip key={`p${i}`} page={p} onClick={() => openPage(p)} />
                 ))}
               </div>
+            )}
+
+            {onExport && message.pages !== undefined && (
+              <ExportRow message={message} onExport={onExport} />
             )}
           </div>
         </div>
@@ -80,10 +67,95 @@ export default function Message({ message }) {
 }
 
 // ---------------------------------------------------------------------------
+// Page chip — clickable, opens PDF at the correct page in a new tab
+// ---------------------------------------------------------------------------
+
+function PageChip({ page, onClick }) {
+  const [hover, setHover] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={`Open page ${page} in PDF`}
+      style={{
+        fontSize: 11,
+        padding: '2px 7px',
+        borderRadius: 4,
+        color: hover ? '#fff' : 'var(--accent)',
+        background: hover ? 'var(--accent)' : 'transparent',
+        border: '1px solid var(--accent)',
+        cursor: 'pointer',
+        opacity: hover ? 1 : 0.85,
+        transition: 'background .12s, color .12s, opacity .12s',
+        fontFamily: 'inherit',
+        lineHeight: 1.4,
+      }}
+    >
+      p.{page}
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Export PDF / DOCX action row
+// ---------------------------------------------------------------------------
+
+function ExportRow({ message, onExport }) {
+  const [busy, setBusy] = useState(null) // 'pdf' | 'docx' | null
+
+  async function run(format) {
+    if (busy) return
+    setBusy(format)
+    try {
+      await onExport(message, format)
+    } catch (e) {
+      console.error('Export failed:', e)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+      <ExportButton label="Export PDF"  busy={busy === 'pdf'}  onClick={() => run('pdf')}  />
+      <ExportButton label="Export DOCX" busy={busy === 'docx'} onClick={() => run('docx')} />
+    </div>
+  )
+}
+
+function ExportButton({ label, busy, onClick }) {
+  const [hover, setHover] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      disabled={busy}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '4px 9px',
+        background: hover && !busy ? 'var(--bg-active)' : 'var(--bg-surface)',
+        border: `1px solid ${hover && !busy ? 'var(--accent)' : 'var(--border-light)'}`,
+        borderRadius: 5,
+        fontSize: 11.5,
+        color: hover && !busy ? 'var(--accent)' : 'var(--text-2)',
+        cursor: busy ? 'wait' : 'pointer',
+        transition: 'border-color .12s, color .12s, background .12s',
+        fontFamily: 'inherit',
+      }}
+    >
+      <DownloadIcon />
+      {busy ? 'Exporting…' : label}
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Markdown renderer — no external dependencies
 // ---------------------------------------------------------------------------
 
-function MarkdownRenderer({ content }) {
+function MarkdownRenderer({ content, onPageClick }) {
   const nodes = []
   const lines = content.split('\n')
   let i = 0
@@ -122,7 +194,7 @@ function MarkdownRenderer({ content }) {
     if (line.startsWith('### ')) {
       nodes.push(
         <h3 key={i} style={{ fontSize: 13.5, fontWeight: 600, margin: '12px 0 3px', color: 'var(--text)' }}>
-          {renderInline(line.slice(4))}
+          {renderInline(line.slice(4), onPageClick)}
         </h3>
       )
       i++; continue
@@ -130,7 +202,7 @@ function MarkdownRenderer({ content }) {
     if (line.startsWith('## ')) {
       nodes.push(
         <h2 key={i} style={{ fontSize: 14.5, fontWeight: 700, margin: '14px 0 4px', color: 'var(--text)' }}>
-          {renderInline(line.slice(3))}
+          {renderInline(line.slice(3), onPageClick)}
         </h2>
       )
       i++; continue
@@ -138,7 +210,7 @@ function MarkdownRenderer({ content }) {
     if (line.startsWith('# ')) {
       nodes.push(
         <h1 key={i} style={{ fontSize: 16, fontWeight: 700, margin: '16px 0 5px', color: 'var(--text)' }}>
-          {renderInline(line.slice(2))}
+          {renderInline(line.slice(2), onPageClick)}
         </h1>
       )
       i++; continue
@@ -161,7 +233,7 @@ function MarkdownRenderer({ content }) {
         <ul key={i} style={{ margin: '4px 0 6px', paddingLeft: 20 }}>
           {items.map((it, j) => (
             <li key={j} style={{ margin: '2px 0', fontSize: 13.5, lineHeight: 1.7, color: 'var(--text)' }}>
-              {renderInline(it)}
+              {renderInline(it, onPageClick)}
             </li>
           ))}
         </ul>
@@ -180,7 +252,7 @@ function MarkdownRenderer({ content }) {
         <ol key={i} style={{ margin: '4px 0 6px', paddingLeft: 22 }}>
           {items.map((it, j) => (
             <li key={j} style={{ margin: '2px 0', fontSize: 13.5, lineHeight: 1.7, color: 'var(--text)' }}>
-              {renderInline(it)}
+              {renderInline(it, onPageClick)}
             </li>
           ))}
         </ol>
@@ -207,7 +279,7 @@ function MarkdownRenderer({ content }) {
         <p key={i} style={{ margin: '4px 0 6px', fontSize: 13.5, lineHeight: 1.7, color: 'var(--text)' }}>
           {paraLines.map((l, j) => (
             <React.Fragment key={j}>
-              {renderInline(l)}
+              {renderInline(l, onPageClick)}
               {j < paraLines.length - 1 && <br />}
             </React.Fragment>
           ))}
@@ -219,21 +291,24 @@ function MarkdownRenderer({ content }) {
   return <div>{nodes}</div>
 }
 
-function renderInline(text) {
+// Matches **bold**, *italic*, `code`, AND (p. N[, p. M, ...]) page citations
+const INLINE_REGEX = /(\*\*[^*\n]+?\*\*|\*[^*\n]+?\*|`[^`\n]+?`|\(\s*p\.?\s*\d+(?:\s*,\s*p\.?\s*\d+)*\s*\)|p\.\s*\d+)/gi
+
+function renderInline(text, onPageClick) {
   const parts = []
-  const regex = /(\*\*[^*\n]+?\*\*|\*[^*\n]+?\*|`[^`\n]+?`)/g
   let last = 0
   let m
   let k = 0
 
-  while ((m = regex.exec(text)) !== null) {
+  while ((m = INLINE_REGEX.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index))
     const token = m[0]
+
     if (token.startsWith('**')) {
       parts.push(<strong key={k++} style={{ fontWeight: 600 }}>{token.slice(2, -2)}</strong>)
     } else if (token.startsWith('*')) {
       parts.push(<em key={k++}>{token.slice(1, -1)}</em>)
-    } else {
+    } else if (token.startsWith('`')) {
       parts.push(
         <code key={k++} style={{
           background: 'var(--bg-surface)',
@@ -246,12 +321,50 @@ function renderInline(text) {
           {token.slice(1, -1)}
         </code>
       )
+    } else {
+      // Page citation — could be "(p. 3)", "(p. 3, p. 5)" or bare "p. 3"
+      const pageNumbers = [...token.matchAll(/\d+/g)].map(x => parseInt(x[0], 10))
+      const wrappedInParens = token.startsWith('(')
+      parts.push(
+        <span key={k++}>
+          {wrappedInParens ? '(' : ''}
+          {pageNumbers.map((n, idx) => (
+            <React.Fragment key={idx}>
+              {idx > 0 && ', '}
+              <CitationLink page={n} onClick={onPageClick} />
+            </React.Fragment>
+          ))}
+          {wrappedInParens ? ')' : ''}
+        </span>
+      )
     }
-    last = regex.lastIndex
+    last = INLINE_REGEX.lastIndex
   }
 
   if (last < text.length) parts.push(text.slice(last))
   return parts
+}
+
+function CitationLink({ page, onClick }) {
+  const handle = (e) => {
+    e.preventDefault()
+    if (onClick) onClick(page)
+  }
+  return (
+    <a
+      href="#"
+      onClick={handle}
+      title={`Open page ${page} in PDF`}
+      style={{
+        color: 'var(--accent)',
+        textDecoration: 'none',
+        borderBottom: '1px dotted var(--accent)',
+        cursor: 'pointer',
+      }}
+    >
+      p. {page}
+    </a>
+  )
 }
 
 // ---------------------------------------------------------------------------

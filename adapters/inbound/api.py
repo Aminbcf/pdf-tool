@@ -7,7 +7,7 @@ from datetime import date
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from adapters.outbound.pdf_adapter import PyMuPDFAdapter
@@ -46,6 +46,17 @@ app.add_middleware(
 @app.post("/api/sessions")
 def create_session():
     return {"session_id": str(uuid.uuid4())}
+
+
+@app.delete("/api/sessions/{session_id}")
+def delete_session(session_id: str):
+    """Wipe history JSON, uploaded PDF, and FAISS index files for a session."""
+    _history.delete(session_id)
+    _emb.delete_session(session_id)
+    pdf_path = os.path.join(UPLOADS_DIR, f"{session_id}.pdf")
+    if os.path.exists(pdf_path):
+        os.remove(pdf_path)
+    return {"status": "deleted", "session_id": session_id}
 
 
 @app.get("/api/sessions")
@@ -121,6 +132,20 @@ async def export_document(
         buf,
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# --- Raw PDF (for in-browser viewing of cited pages) -----------------------
+
+@app.get("/api/sessions/{session_id}/pdf")
+def get_pdf(session_id: str):
+    path = os.path.join(UPLOADS_DIR, f"{session_id}.pdf")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="No PDF for this session")
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="document.pdf"'},
     )
 
 

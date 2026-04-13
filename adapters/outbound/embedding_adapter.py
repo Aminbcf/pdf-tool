@@ -52,6 +52,13 @@ class FAISSEmbeddingAdapter(IEmbeddingService):
     def has_index(self, session_id: str) -> bool:
         return session_id in self._cache or os.path.exists(self._index_path(session_id))
 
+    def delete_session(self, session_id: str) -> None:
+        """Drop the in-memory cache entry and remove persisted index files."""
+        self._cache.pop(session_id, None)
+        for path in (self._index_path(session_id), self._pages_path(session_id)):
+            if os.path.exists(path):
+                os.remove(path)
+
     def _load(self, session_id: str) -> Tuple:
         if session_id in self._cache:
             return self._cache[session_id]

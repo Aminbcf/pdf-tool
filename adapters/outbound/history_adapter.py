@@ -68,3 +68,9 @@ class FileConversationHistory(IConversationHistory):
                 session_id = fname[:-5]
                 sessions.append(self.get_or_create(session_id))
         return sessions
+
+    def delete(self, session_id: str) -> None:
+        self._cache.pop(session_id, None)
+        path = self._path(session_id)
+        if os.path.exists(path):
+            os.remove(path)

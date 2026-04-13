@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react'
 import Message from './Message.jsx'
 import TypingIndicator from './TypingIndicator.jsx'
 
-export default function ChatPanel({ title, messages, loading, onSend, onChangePdf }) {
+export default function ChatPanel({ sessionId, title, messages, loading, onSend, onChangePdf, onExport }) {
   const bottomRef = useRef()
   const textareaRef = useRef()
   const [query, setQuery] = useState('')
@@ -88,7 +88,9 @@ export default function ChatPanel({ title, messages, loading, onSend, onChangePd
             Ask anything about your PDF
           </div>
         ) : (
-          messages.map(msg => <Message key={msg.id} message={msg} />)
+          messages.map(msg => (
+            <Message key={msg.id} message={msg} sessionId={sessionId} onExport={onExport} />
+          ))
         )}
         {loading && <TypingIndicator />}
         <div ref={bottomRef} />
@@ -107,7 +109,7 @@ export default function ChatPanel({ title, messages, loading, onSend, onChangePd
             value={query}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Ask a question… or /pdf [docx] <query> to export"
+            placeholder="Ask a question about your PDF…"
             rows={1}
             style={{
               flex: 1,
@@ -129,7 +131,7 @@ export default function ChatPanel({ title, messages, loading, onSend, onChangePd
           <SendButton disabled={!query.trim() || loading} onClick={submit} />
         </div>
         <p style={{ marginTop: 7, fontSize: 11, color: 'var(--text-3)', paddingLeft: 1 }}>
-          Enter to send · Shift+Enter for newline · /pdf [docx] &lt;query&gt; exports a document
+          Enter to send · Shift+Enter for newline · use the Export buttons under any answer to save as PDF or DOCX
         </p>
       </div>
     </div>

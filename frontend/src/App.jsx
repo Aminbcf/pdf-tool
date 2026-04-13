@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import Sidebar from './components/Sidebar.jsx'
 import ChatPanel from './components/ChatPanel.jsx'
 import UploadPanel from './components/UploadPanel.jsx'
-import { createSession, uploadPdf, askQuestion, getHistory, exportDocument } from './api.js'
+import { createSession, uploadPdf, askQuestion, getHistory, exportDocument, deleteSession } from './api.js'
 
 const STORAGE_KEY = 'pdftool_sessions_v2'
 const CURRENT_KEY = 'pdftool_current_v2'
@@ -100,37 +100,20 @@ export default function App() {
   async function handleSend(query) {
     if (!currentId || loading) return
 
-    // /pdf [docx] <query>  — export answer as a document
-    const pdfMatch = query.match(/^\/pdf(?:\s+(docx))?\s+([\s\S]+)/i)
-    const exportFmt = pdfMatch ? (pdfMatch[1]?.toLowerCase() || 'pdf') : null
-    const actualQuery = pdfMatch ? pdfMatch[2].trim() : query
-
     const userMsg = { id: `u-${Date.now()}`, role: 'user', content: query, keywords: [], pages: [] }
     setMessages(prev => [...prev, userMsg])
     setLoading(true)
     try {
-      const data = await askQuestion(currentId, actualQuery)
+      const data = await askQuestion(currentId, query)
       const aiMsg = {
         id: `a-${Date.now()}`,
         role: 'assistant',
         content: data.answer,
         keywords: data.keywords ?? [],
         pages: data.source_pages ?? [],
-        exportFormat: exportFmt ?? undefined,
+        query,
       }
       setMessages(prev => [...prev, aiMsg])
-
-      if (exportFmt) {
-        const blob = await exportDocument(currentId, actualQuery, data.answer, data.source_pages, exportFmt)
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `answer.${exportFmt}`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        setTimeout(() => URL.revokeObjectURL(url), 10000)
-      }
     } catch (e) {
       setMessages(prev => [
         ...prev,
@@ -138,6 +121,42 @@ export default function App() {
       ])
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleExport(message, format) {
+    if (!currentId) return
+    const title = message.query || 'Answer'
+    const blob = await exportDocument(currentId, title, message.content, message.pages ?? [], format)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `answer.${format}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 10000)
+  }
+
+  async function handleDeleteSession(id) {
+    try {
+      await deleteSession(id)
+    } catch (e) {
+      console.error('Delete failed:', e)
+    }
+    const remaining = sessions.filter(s => s.id !== id)
+    setSessions(remaining)
+    persistSessions(remaining)
+
+    if (currentId === id) {
+      const next = remaining[0]?.id ?? null
+      if (next) {
+        activateSession(next, remaining)
+      } else {
+        setCurrentId(null)
+        localStorage.removeItem(CURRENT_KEY)
+        setMessages([])
+      }
     }
   }
 
@@ -160,6 +179,7 @@ export default function App() {
         currentId={currentId}
         onNewSession={handleNewSession}
         onSelectSession={id => activateSession(id)}
+        onDeleteSession={handleDeleteSession}
       />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)' }}>
@@ -181,11 +201,13 @@ export default function App() {
 
         {panel === 'chat' && (
           <ChatPanel
+            sessionId={currentId}
             title={currentSession?.label || currentId?.slice(0, 8) || ''}
             messages={messages}
             loading={loading}
             onSend={handleSend}
             onChangePdf={handleChangePdf}
+            onExport={handleExport}
           />
         )}
       </main>

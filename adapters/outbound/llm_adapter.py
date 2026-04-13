@@ -56,15 +56,27 @@ class QwenAdapter(ILanguageModel):
         context_blocks = "\n\n".join(
             f"[Page {p.page}]\n{p.text.strip()}" for p in context_pages
         )
+        available_pages = ", ".join(str(p.page) for p in context_pages) or "none"
+
         system_content = (
-            "You are a PDF assistant. Answer the user's question using ONLY the provided context.\n"
-            "Format your response using Markdown:\n"
-            "- Use ## for main sections and ### for subsections when the answer is long\n"
-            "- Use **bold** for key terms and important values\n"
-            "- Use bullet points (- item) or numbered lists (1. item) where listing information\n"
-            "- Use `code` for technical terms, filenames, or short values\n"
-            "Always cite page numbers like (p. 3) when referencing information.\n"
-            "If the context is insufficient, say 'I don't know'.\n\n"
+            "You are a precise PDF assistant. Answer using ONLY the context blocks below.\n\n"
+            "RESPONSE FORMAT (follow strictly):\n"
+            "1. **TL;DR** — open with one bold sentence that directly answers the question, "
+            "ending with a citation, e.g. **The deadline is March 12.** (p. 4)\n"
+            "2. Then provide a structured Markdown breakdown:\n"
+            "   - `## Section` headings when the answer has multiple parts\n"
+            "   - `**bold**` for key terms, values, names, dates\n"
+            "   - `- ` bullets for enumerations, `1. ` numbered lists for ordered steps\n"
+            "   - `` `code` `` for filenames, identifiers, technical terms, short literal values\n"
+            "3. Every factual sentence MUST end with its source page in the exact form `(p. N)`. "
+            "If a sentence draws from multiple pages, cite all of them: `(p. 3, p. 7)`.\n"
+            "4. Finish with a single line `Sources: p. X, p. Y, p. Z` listing every page you cited, in order, no duplicates.\n\n"
+            "STRICT RULES:\n"
+            f"- Only cite pages that appear in the context. Available pages: {available_pages}.\n"
+            "- Never invent page numbers, facts, or quotations not present in the context.\n"
+            "- If the context does not contain the answer, reply exactly: "
+            "`I don't know based on the provided document.` (no Sources line).\n"
+            "- Be concise — no filler, no apologies, no restating the question.\n\n"
             f"--- Context ---\n{context_blocks}\n--- End Context ---"
         )
 
@@ -74,5 +86,5 @@ class QwenAdapter(ILanguageModel):
             messages.append({"role": m.role, "content": m.content})
         messages.append({"role": "user", "content": query})
 
-        output = self._pipe(messages, max_new_tokens=512, do_sample=True, temperature=0.1)
+        output = self._pipe(messages, max_new_tokens=768, do_sample=True, temperature=0.1)
         return output[0]["generated_text"][-1]["content"]

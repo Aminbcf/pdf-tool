@@ -4,6 +4,15 @@ export async function createSession() {
   return r.json()
 }
 
+export async function deleteSession(sessionId) {
+  const r = await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' })
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}))
+    throw new Error(err.detail || 'Delete failed')
+  }
+  return r.json()
+}
+
 export async function listSessions() {
   const r = await fetch('/api/sessions')
   if (!r.ok) throw new Error('Failed to list sessions')
@@ -36,6 +45,11 @@ export async function getHistory(sessionId) {
   const r = await fetch(`/api/sessions/${sessionId}/history`)
   if (!r.ok) throw new Error('Failed to load history')
   return r.json()
+}
+
+export function pdfUrl(sessionId, page) {
+  const base = `/api/sessions/${sessionId}/pdf`
+  return page ? `${base}#page=${page}` : base
 }
 
 export async function exportDocument(sessionId, title, text, sourcePages, format = 'pdf') {

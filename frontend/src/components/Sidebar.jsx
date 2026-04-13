@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function Sidebar({ sessions, currentId, onNewSession, onSelectSession }) {
+export default function Sidebar({ sessions, currentId, onNewSession, onSelectSession, onDeleteSession }) {
   return (
     <aside style={{
       width: 'var(--sidebar-w)',
@@ -41,6 +41,12 @@ export default function Sidebar({ sessions, currentId, onNewSession, onSelectSes
               session={s}
               active={s.id === currentId}
               onClick={() => onSelectSession(s.id)}
+              onDelete={() => {
+                const label = s.label || s.id.slice(0, 8)
+                if (window.confirm(`Delete conversation "${label}"? This removes its history, PDF and index.`)) {
+                  onDeleteSession?.(s.id)
+                }
+              }}
             />
           ))
         )}
@@ -73,8 +79,14 @@ function NewButton({ onClick }) {
   )
 }
 
-function SessionItem({ session, active, onClick }) {
+function SessionItem({ session, active, onClick, onDelete }) {
   const [hover, setHover] = React.useState(false)
+
+  function handleDeleteClick(e) {
+    e.stopPropagation()
+    onDelete?.()
+  }
+
   return (
     <div
       onClick={onClick}
@@ -117,6 +129,45 @@ function SessionItem({ session, active, onClick }) {
           {session.hasPdf ? 'PDF ready' : 'No PDF'}
         </div>
       </div>
+      {(hover || active) && onDelete && (
+        <DeleteButton onClick={handleDeleteClick} />
+      )}
     </div>
+  )
+}
+
+function DeleteButton({ onClick }) {
+  const [hover, setHover] = React.useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title="Delete conversation"
+      style={{
+        flexShrink: 0,
+        width: 20,
+        height: 20,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'transparent',
+        border: 'none',
+        borderRadius: 4,
+        cursor: 'pointer',
+        color: hover ? '#ef4444' : 'var(--text-3)',
+        opacity: hover ? 1 : 0.7,
+        padding: 0,
+        transition: 'color .12s, background .12s, opacity .12s',
+      }}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+        style={{ width: 12, height: 12 }}>
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6M14 11v6" />
+        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      </svg>
+    </button>
   )
 }
